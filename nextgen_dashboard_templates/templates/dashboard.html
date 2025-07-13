@@ -1,0 +1,28 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - NextGen Security</title>
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Welcome, {{ current_user.id }}!</h1>
+    <a href="{{ url_for('logout') }}">Logout</a>
+
+    <div id="presence-data">
+        <h2>Presence Activity</h2>
+        <ul id="log"></ul>
+    </div>
+
+    <script>
+        const socket = io();
+        socket.on('update', function(data) {
+            const log = document.getElementById('log');
+            const li = document.createElement('li');
+            li.textContent = data.message;
+            log.prepend(li);
+        });
+    </script>
+</body>
+</html>

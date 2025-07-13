@@ -1,0 +1,12 @@
+{
+  "notifiers": [
+    {
+      "name": "Email Alerts",
+      "type": "email",
+      "uid": "email_notifier",
+      "settings": {
+        "addresses": "your@email.com"
+      }
+    }
+  ]
+}

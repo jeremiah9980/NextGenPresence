@@ -1,0 +1,22 @@
+
+apiVersion: 1
+
+groups:
+  - name: Presence Alerts
+    interval: 1m
+    rules:
+      - uid: repeated-visits
+        title: Repeated Visits by Unknown Device
+        condition: "B"
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: influxdb
+            model:
+              query: "SELECT count(*) FROM presence WHERE mac IN (SELECT mac FROM presence WHERE known = false)"
+              intervalMs: 10000
+              maxDataPoints: 43200
+        annotations:
+          summary: "Possible repeated intrusion"

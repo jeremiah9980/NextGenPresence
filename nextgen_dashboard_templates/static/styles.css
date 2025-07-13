@@ -1,0 +1,22 @@
+
+body {
+    font-family: Arial, sans-serif;
+    padding: 2em;
+    background: #f4f4f4;
+}
+.login-container {
+    background: #fff;
+    padding: 2em;
+    max-width: 300px;
+    margin: 0 auto;
+    box-shadow: 0 0 10px #ccc;
+}
+input {
+    width: 100%;
+    margin-bottom: 1em;
+    padding: 0.5em;
+}
+button {
+    padding: 0.5em;
+    width: 100%;
+}

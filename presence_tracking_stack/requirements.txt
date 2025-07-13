@@ -1,0 +1,4 @@
+python-dotenv
+ring_doorbell
+paho-mqtt
+scapy

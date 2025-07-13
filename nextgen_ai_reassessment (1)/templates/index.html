@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><title>Device Tagger</title></head>
+<body>
+<h2>Unlabeled Devices</h2>
+<table border="1">
+<tr><th>MAC</th><th>Last Seen</th><th>Friendly Name</th><th>Action</th></tr>
+{% for mac, ts, name in devices %}
+<tr>
+<td>{{ mac }}</td><td>{{ ts }}</td><td>{{ name or '-' }}</td>
+<td>
+  <form method="post" action="/tag">
+    <input type="hidden" name="mac" value="{{ mac }}">
+    <input type="text" name="name" placeholder="Enter name" required>
+    <input type="submit" value="Tag">
+  </form>
+</td>
+</tr>
+{% endfor %}
+</table>
+</body>
+</html>

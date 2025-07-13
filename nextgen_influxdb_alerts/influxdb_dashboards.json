@@ -1,0 +1,8 @@
+{
+  "dashboard": {
+    "title": "Presence Analytics",
+    "panels": [
+      {"type": "graph", "title": "Device Count", "targets": [{"measurement": "presence_count"}]}
+    ]
+  }
+}
