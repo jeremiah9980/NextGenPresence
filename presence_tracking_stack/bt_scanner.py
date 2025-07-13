@@ -8,7 +8,10 @@ conn.commit()
 def scan():
     out = os.popen("hcitool scan").read().splitlines()[1:]
     for line in out:
-        mac, name = line.strip().split("\t")
+        parts = line.strip().split(None, 1)
+        if len(parts) != 2:
+            continue
+        mac, name = parts
         cursor.execute("INSERT INTO bt_presence (timestamp, mac, name) VALUES (?, ?, ?)",
                        (time.strftime('%Y-%m-%d %H:%M:%S'), mac, name))
         conn.commit()
