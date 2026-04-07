@@ -1,34 +1,323 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>NextGen Platform Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
-        h1 { color: #333; }
-        .card { background: white; padding: 20px; margin: 15px 0; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        a { text-decoration: none; color: #007BFF; }
-        .link { margin-top: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NextGen Presence Dashboard</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --green:     #2ea043;
+      --green-dim: #1a3a22;
+      --red:       #da3633;
+      --red-dim:   #3a1a1a;
+      --yellow:    #d29922;
+      --blue:      #388bfd;
+      --accent:    #58a6ff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 56px 1fr;
+      grid-template-columns: 1fr 340px;
+      grid-template-areas:
+        "header header"
+        "main   sidebar";
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 16px; font-weight: 600; color: var(--accent); letter-spacing: .02em; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pill-home  { background: var(--green-dim); color: var(--green); }
+    .pill-away  { background: var(--red-dim);   color: var(--red);   }
+    .pill-total { background: #1c2433;          color: var(--accent);}
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .updated { color: var(--muted); font-size: 12px; }
+    .btn-tag {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn-tag:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Map */
+    main { grid-area: main; position: relative; overflow: hidden; }
+    #map { width: 100%; height: 100%; }
+
+    /* Map overlay cards */
+    .map-overlay {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: calc(100% - 24px);
+      overflow-y: auto;
+      pointer-events: none;
+    }
+    .device-card {
+      background: rgba(22, 27, 34, 0.93);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      width: 210px;
+      pointer-events: all;
+      backdrop-filter: blur(8px);
+      transition: border-color .2s;
+    }
+    .device-card:hover { border-color: var(--accent); }
+    .device-card .dc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.home { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+    .status-dot.away { background: var(--red); }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 4px var(--green); }
+      50%       { box-shadow: 0 0 10px var(--green); }
+    }
+    .dc-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dc-meta { font-size: 11px; color: var(--muted); display: flex; gap: 8px; }
+    .dc-duration { font-size: 12px; margin-top: 3px; }
+    .dc-duration.home { color: var(--green); }
+    .dc-duration.away { color: var(--red); }
+
+    /* Sidebar */
+    aside {
+      grid-area: sidebar;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .section-label {
+      padding: 12px 16px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .device-list { flex: 1; overflow-y: auto; }
+    .device-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 16px;
+      border-bottom: 1px solid rgba(48,54,61,0.5);
+    }
+    .device-row:hover { background: rgba(56,139,253,0.05); }
+    .dr-info { flex: 1; min-width: 0; }
+    .dr-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dr-sub  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      letter-spacing: .04em;
+    }
+    .badge-home { background: var(--green-dim); color: var(--green); }
+    .badge-away { background: var(--red-dim);   color: var(--red);   }
+
+    /* Ring feed */
+    .ring-feed { height: 200px; overflow-y: auto; flex-shrink: 0; }
+    .ring-event { padding: 8px 16px; border-bottom: 1px solid rgba(48,54,61,0.4); }
+    .re-kind { font-weight: 600; font-size: 12px; color: var(--yellow); }
+    .re-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .ring-empty { padding: 20px 16px; color: var(--muted); font-size: 12px; text-align: center; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Dark map tiles */
+    .leaflet-tile { filter: brightness(0.65) saturate(0.5) hue-rotate(185deg) invert(1); }
+    .leaflet-container { background: #0d1117; }
+  </style>
 </head>
 <body>
-    <h1>NextGen Home Security Platform</h1>
-    <div class="card">
-        <h2>Device Presence & Analytics</h2>
-        <div class="link"><a href="/presence">View Presence Dashboard</a></div>
-    </div>
-    <div class="card">
-        <h2>Tagging & Device Identification</h2>
-        <div class="link"><a href="/tag">Manage Known Devices</a></div>
-    </div>
-    <div class="card">
-        <h2>Ring Camera Events</h2>
-        <div class="link"><a href="/ring">View Ring Event Log</a></div>
-    </div>
-    <div class="card">
-        <h2>Grafana Monitoring</h2>
-        <div class="link"><a href="http://localhost:3000" target="_blank">Open Grafana Dashboard</a></div>
-    </div>
+
+<header>
+  <h1>NextGen Presence</h1>
+  <span class="pill pill-home"><span class="dot"></span><span id="stat-home">0</span>&nbsp;home</span>
+  <span class="pill pill-away"><span class="dot"></span><span id="stat-away">0</span>&nbsp;away</span>
+  <span class="pill pill-total"><span id="stat-total">0</span>&nbsp;devices</span>
+  <div class="header-right">
+    <span class="updated">Updated: <span id="stat-updated">—</span></span>
+    <a class="btn-tag" href="http://localhost:5001" target="_blank">Tag Devices</a>
+  </div>
+</header>
+
+<main>
+  <div id="map"></div>
+  <div class="map-overlay" id="overlay-cards"></div>
+</main>
+
+<aside>
+  <div class="section-label">All Devices</div>
+  <div class="device-list" id="device-list"></div>
+  <div class="section-label" style="border-top:1px solid var(--border)">Ring Events</div>
+  <div class="ring-feed" id="ring-feed"></div>
+</aside>
+
+<script>
+  const HOME_LAT  = {{ home_lat }};
+  const HOME_LON  = {{ home_lon }};
+  const HOME_NAME = {{ home_name | tojson }};
+
+  // ── Map ───────────────────────────────────────────────────────────────────
+  const map = L.map('map', { zoomControl: false }).setView([HOME_LAT, HOME_LON], 17);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  // Home pin
+  const homeIcon = L.divIcon({
+    className: '',
+    html: `<div style="width:20px;height:20px;border-radius:50%;
+             background:#58a6ff;border:3px solid #fff;
+             box-shadow:0 0 14px #58a6ff88;"></div>`,
+    iconAnchor: [10, 10]
+  });
+  L.marker([HOME_LAT, HOME_LON], { icon: homeIcon })
+    .addTo(map)
+    .bindPopup(`<b>${HOME_NAME}</b><br>Detection zone`);
+
+  // Detection radius
+  L.circle([HOME_LAT, HOME_LON], {
+    radius: 80,
+    color: '#388bfd',
+    fillColor: '#388bfd',
+    fillOpacity: 0.07,
+    weight: 1,
+    dashArray: '5 7'
+  }).addTo(map);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function esc(s) {
+    return String(s || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Render presence ───────────────────────────────────────────────────────
+  function renderPresence(data) {
+    const { devices, summary } = data;
+
+    document.getElementById('stat-home').textContent    = summary.home;
+    document.getElementById('stat-away').textContent    = summary.away;
+    document.getElementById('stat-total').textContent   = summary.total;
+    document.getElementById('stat-updated').textContent = summary.updated;
+
+    // Sidebar
+    document.getElementById('device-list').innerHTML = devices.map(d => `
+      <div class="device-row">
+        <div class="status-dot ${d.status}"></div>
+        <div class="dr-info">
+          <div class="dr-name">${esc(d.name)}</div>
+          <div class="dr-sub">${esc(d.source)} &middot; ${esc(d.duration)}</div>
+        </div>
+        <span class="badge badge-${d.status}">${d.status === 'home' ? 'HOME' : 'AWAY'}</span>
+      </div>
+    `).join('');
+
+    // Map overlay — home devices only
+    document.getElementById('overlay-cards').innerHTML = devices
+      .filter(d => d.home)
+      .map(d => `
+        <div class="device-card">
+          <div class="dc-header">
+            <div class="status-dot home"></div>
+            <div class="dc-name">${esc(d.name)}</div>
+          </div>
+          <div class="dc-meta">
+            <span>${esc(d.source)}</span>
+            <span>conf&nbsp;${d.confidence}</span>
+          </div>
+          <div class="dc-duration home">&#9679; present &middot; ${esc(d.duration)}</div>
+        </div>
+      `).join('');
+  }
+
+  // ── Render Ring events ────────────────────────────────────────────────────
+  function renderRing(events) {
+    const feed = document.getElementById('ring-feed');
+    if (!events || !events.length) {
+      feed.innerHTML = '<div class="ring-empty">No Ring events recorded yet.</div>';
+      return;
+    }
+    feed.innerHTML = events.slice(0, 25).map(e => `
+      <div class="ring-event">
+        <div class="re-kind">${esc(e.kind || 'event')} &middot; ${esc(e.device || '')}</div>
+        <div class="re-meta">${esc(e.timestamp)}${e.description ? ' &middot; ' + esc(e.description) : ''}</div>
+      </div>
+    `).join('');
+  }
+
+  // ── Fetch & refresh ───────────────────────────────────────────────────────
+  function refresh() {
+    fetch('/api/presence')
+      .then(r => r.json())
+      .then(renderPresence)
+      .catch(console.error);
+
+    fetch('/api/ring')
+      .then(r => r.json())
+      .then(d => renderRing(d.events))
+      .catch(console.error);
+  }
+
+  refresh();
+  setInterval(refresh, 30000);
+</script>
 </body>
 </html>

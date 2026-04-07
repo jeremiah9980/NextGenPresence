@@ -1,20 +1,37 @@
+import sys, time
+from pathlib import Path
 from scapy.all import ARP, Ether, srp
-import sqlite3, time
 
-conn = sqlite3.connect("event_sync.db")
-cursor = conn.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS wifi_presence (id INTEGER PRIMARY KEY, timestamp TEXT, mac TEXT, ip TEXT)")
-conn.commit()
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from db import get_conn
 
-def scan():
-    arp = ARP(pdst="192.168.1.1/24")
-    ether = Ether(dst="ff:ff:ff:ff:ff:ff")
-    ans = srp(ether/arp, timeout=2, verbose=0)[0]
-    for s, r in ans:
-        cursor.execute("INSERT INTO wifi_presence (timestamp, mac, ip) VALUES (?, ?, ?)",
-                       (time.strftime('%Y-%m-%d %H:%M:%S'), r.hwsrc, r.psrc))
-        conn.commit()
+SUBNET = __import__("os").getenv("WIFI_SUBNET", "172.16.207.0/24")
 
-while True:
-    scan()
-    time.sleep(60)
+def scan(conn):
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    arp = ARP(pdst=SUBNET)
+    ans = srp(Ether(dst="ff:ff:ff:ff:ff:ff") / arp, timeout=2, verbose=0)[0]
+    for _, r in ans:
+        mac, ip = r.hwsrc, r.psrc
+        conn.execute(
+            "INSERT INTO wifi_presence (timestamp, mac, ip) VALUES (?, ?, ?)",
+            (now, mac, ip),
+        )
+        conn.execute(
+            """INSERT INTO device_log (mac, first_seen, last_seen, source)
+               VALUES (?, ?, ?, 'wifi')
+               ON CONFLICT(mac) DO UPDATE SET last_seen=excluded.last_seen""",
+            (mac, now, now),
+        )
+    conn.commit()
+    print(f"[wifi] {now}: found {len(ans)} device(s)")
+
+if __name__ == "__main__":
+    conn = get_conn()
+    print(f"WiFi scanner started (subnet: {SUBNET})")
+    while True:
+        try:
+            scan(conn)
+        except Exception as e:
+            print(f"[wifi] error: {e}")
+        time.sleep(60)
