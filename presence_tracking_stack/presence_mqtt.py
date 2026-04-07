@@ -1,19 +1,32 @@
-import sqlite3, time, json
+import sys, time, json, os
+from pathlib import Path
 import paho.mqtt.client as mqtt
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from db import get_conn
+
+MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+
 client = mqtt.Client()
-client.connect("localhost", 1883)
+client.connect(MQTT_HOST, MQTT_PORT)
 
-def push(table):
-    conn = sqlite3.connect("event_sync.db")
-    cursor = conn.cursor()
-    cursor.execute(f"SELECT * FROM {table} ORDER BY timestamp DESC LIMIT 1")
-    row = cursor.fetchone()
+def push_latest(conn, table, topic):
+    cur = conn.execute(f"SELECT * FROM {table} ORDER BY timestamp DESC LIMIT 1")
+    row = cur.fetchone()
     if row:
-        payload = json.dumps(dict(zip([c[0] for c in cursor.description], row)))
-        client.publish(f"presence/{table}", payload)
+        cols = [d[0] for d in cur.description]
+        payload = json.dumps(dict(zip(cols, row)))
+        client.publish(f"presence/{topic}", payload)
 
-while True:
-    push("wifi_presence")
-    push("bt_presence")
-    time.sleep(30)
+if __name__ == "__main__":
+    conn = get_conn()
+    print(f"MQTT publisher started → {MQTT_HOST}:{MQTT_PORT}")
+    while True:
+        try:
+            push_latest(conn, "wifi_presence", "wifi")
+            push_latest(conn, "bt_presence", "bluetooth")
+            push_latest(conn, "ring_events", "ring")
+        except Exception as e:
+            print(f"[mqtt] error: {e}")
+        time.sleep(30)

@@ -1,18 +1,57 @@
-import os, sqlite3, time
+import sys, time, subprocess, re
+from pathlib import Path
 
-conn = sqlite3.connect("event_sync.db")
-cursor = conn.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS bt_presence (id INTEGER PRIMARY KEY, timestamp TEXT, mac TEXT, name TEXT)")
-conn.commit()
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from db import get_conn
 
-def scan():
-    out = os.popen("hcitool scan").read().splitlines()[1:]
-    for line in out:
-        mac, name = line.strip().split("\t")
-        cursor.execute("INSERT INTO bt_presence (timestamp, mac, name) VALUES (?, ?, ?)",
-                       (time.strftime('%Y-%m-%d %H:%M:%S'), mac, name))
-        conn.commit()
+_MAC_RE = re.compile(r"([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})")
 
-while True:
-    scan()
-    time.sleep(90)
+def _bluetoothctl_scan(timeout=8):
+    """Return list of (mac, name) discovered via bluetoothctl."""
+    try:
+        subprocess.run(["bluetoothctl", "power", "on"], capture_output=True, timeout=5)
+        subprocess.run(["bluetoothctl", "scan", "on"], capture_output=True, timeout=2)
+        time.sleep(timeout)
+        out = subprocess.check_output(
+            ["bluetoothctl", "devices"], text=True, timeout=5
+        )
+        subprocess.run(["bluetoothctl", "scan", "off"], capture_output=True, timeout=2)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+
+    results = []
+    for line in out.splitlines():
+        # Format: "Device AA:BB:CC:DD:EE:FF DeviceName"
+        m = _MAC_RE.search(line)
+        if m:
+            mac = m.group(1)
+            name = line.split(mac, 1)[-1].strip() or "unknown"
+            results.append((mac, name))
+    return results
+
+def scan(conn):
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    devices = _bluetoothctl_scan()
+    for mac, name in devices:
+        conn.execute(
+            "INSERT INTO bt_presence (timestamp, mac, name) VALUES (?, ?, ?)",
+            (now, mac, name),
+        )
+        conn.execute(
+            """INSERT INTO device_log (mac, first_seen, last_seen, source)
+               VALUES (?, ?, ?, 'bluetooth')
+               ON CONFLICT(mac) DO UPDATE SET last_seen=excluded.last_seen""",
+            (mac, now, now),
+        )
+    conn.commit()
+    print(f"[bt] {now}: found {len(devices)} device(s)")
+
+if __name__ == "__main__":
+    conn = get_conn()
+    print("Bluetooth scanner started (using bluetoothctl)")
+    while True:
+        try:
+            scan(conn)
+        except Exception as e:
+            print(f"[bt] error: {e}")
+        time.sleep(90)
