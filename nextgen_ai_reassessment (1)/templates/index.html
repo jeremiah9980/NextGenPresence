@@ -1,22 +1,42 @@
 <!DOCTYPE html>
-<html>
-<head><title>Device Tagger</title></head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NextGen Device Tagger</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; background: white; }
+    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+    th { background: #333; color: white; }
+    tr:nth-child(even) { background: #f9f9f9; }
+    input[type=text] { width: 160px; padding: 4px; }
+    input[type=submit] { padding: 4px 10px; cursor: pointer; }
+    .tagged { color: green; }
+  </style>
+</head>
 <body>
-<h2>Unlabeled Devices</h2>
-<table border="1">
-<tr><th>MAC</th><th>Last Seen</th><th>Friendly Name</th><th>Action</th></tr>
-{% for mac, ts, name in devices %}
-<tr>
-<td>{{ mac }}</td><td>{{ ts }}</td><td>{{ name or '-' }}</td>
-<td>
-  <form method="post" action="/tag">
-    <input type="hidden" name="mac" value="{{ mac }}">
-    <input type="text" name="name" placeholder="Enter name" required>
-    <input type="submit" value="Tag">
-  </form>
-</td>
-</tr>
-{% endfor %}
-</table>
+  <h1>NextGen Device Tagger</h1>
+  <table>
+    <tr>
+      <th>MAC</th><th>Last Seen</th><th>Source</th>
+      <th>Confidence</th><th>Friendly Name</th><th>Action</th>
+    </tr>
+    {% for mac, last_seen, name, confidence, source in devices %}
+    <tr>
+      <td>{{ mac }}</td>
+      <td>{{ last_seen }}</td>
+      <td>{{ source or '-' }}</td>
+      <td>{{ confidence }}</td>
+      <td class="{{ 'tagged' if name else '' }}">{{ name or '-' }}</td>
+      <td>
+        <form method="post" action="/tag" style="display:inline">
+          <input type="hidden" name="mac" value="{{ mac }}">
+          <input type="text" name="name" placeholder="{{ name or 'Enter name' }}">
+          <input type="submit" value="Tag">
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
 </body>
 </html>
