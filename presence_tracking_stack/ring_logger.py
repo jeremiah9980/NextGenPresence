@@ -24,6 +24,37 @@ def get_ring():
     ring.update_data()
     return ring
 
+def _is_auth_error(exc):
+    """Best-effort detection of an expired/invalid Ring auth token."""
+    try:
+        from ring_doorbell.exceptions import AuthenticationError
+        if isinstance(exc, AuthenticationError):
+            return True
+    except ImportError:
+        pass
+    msg = str(exc).lower()
+    return "401" in msg or "unauthorized" in msg or "auth" in msg and "token" in msg
+
+def refresh_or_exit(auth, exc):
+    """Try to refresh the Ring auth token; if that's not possible, exit with
+    a clear, actionable message instead of crashing with a raw traceback."""
+    print(f"[ring] warning: auth token appears to be expired/invalid ({exc})")
+    refresh_token = getattr(auth, "refresh_token", None)
+    if callable(refresh_token):
+        try:
+            refresh_token()
+            print("[ring] token refreshed successfully, resuming polling")
+            return True
+        except Exception as refresh_exc:
+            print(f"[ring] warning: token refresh failed ({refresh_exc})")
+    print(
+        "[ring] Ring authentication has expired and could not be refreshed.\n"
+        "       Re-run the auth flow to fix this:\n"
+        f"           python3 {Path(__file__).resolve().parent / 'ring_auth.py'}\n"
+        "       Exiting so the failure isn't silent."
+    )
+    sys.exit(1)
+
 def log_events(ring, conn):
     inserted = 0
     for cam in ring.video_devices():
@@ -53,5 +84,14 @@ if __name__ == "__main__":
             n = log_events(ring, conn)
             print(f"[ring] {time.strftime('%Y-%m-%d %H:%M:%S')}: +{n} new event(s)")
         except Exception as e:
-            print(f"[ring] error: {e}")
+            if _is_auth_error(e):
+                refresh_or_exit(ring.auth, e)
+                # If we get here, the token was refreshed — re-fetch ring data
+                # before the next poll so we use the new credentials.
+                try:
+                    ring.update_data()
+                except Exception as refresh_update_exc:
+                    print(f"[ring] error: still failing after refresh: {refresh_update_exc}")
+            else:
+                print(f"[ring] error: {e}")
         time.sleep(POLL_INTERVAL)

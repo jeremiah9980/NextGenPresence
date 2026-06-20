@@ -1,0 +1,6 @@
+# Pinned dependencies for NextGenPresence (presence_tracking_stack, dashboard, tagger UI)
+python-dotenv==1.0.1
+ring_doorbell==0.8.9
+paho-mqtt==1.6.1
+scapy==2.5.0
+Flask==3.0.3
